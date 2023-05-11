@@ -1,44 +1,88 @@
+const userRepository = require('../repositories/userRepository');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const userRepository = require('../repositories/userRepository');
 
-const registerUser = async (username, email, password) => {
-  const existingUserByUsername = await userRepository.getUserByUsername(username);
+const registerUser = async (data) => {
+  //const { username, email, password } = data;
+  
+  const existingUserByUsername = await userRepository.getUserByUsername(data.username);
   if (existingUserByUsername) {
     throw new Error('Username already exists');
   }
 
-  const existingUserByEmail = await userRepository.getUserByEmail(email);
+  const existingUserByEmail = await userRepository.getUserByEmail(data.email);
   if (existingUserByEmail) {
     throw new Error('Email already exists');
   }
 
-  const hashedPassword = await bcrypt.hashSync(password, 10);
-  const user = await userRepository.createUser(username, email, hashedPassword);
-  return user;
+  const hashedPassword = await bcrypt.hash(data.password, 10);
+  const User = await userRepository.createUser({
+    username: data.username,
+    email: data.email,
+    password: hashedPassword,
+    role: data.role
+  });
+
+  return User;
 };
 
-const loginUser = async (username, password) => {
-  const user = await userRepository.getUserByUsername(username);
-  if (!user) {
-    throw new Error('User not found');
+const loginUser = async (data) => {
+  const { username, email, password, role } = data;
+
+  const existingUserByUsername = await userRepository.getUserByUsername(data.username);
+  if (!existingUserByUsername) {
+    throw new Error('Username not found');
   }
 
-//   const isEmailValid = await bcrypt.compare(email, user.email);
-//   if (!isEmailValid) {
-//     throw new Error('Invalid email');
-//   }
+  const existingUserByEmail = await userRepository.getUserByEmail(data.email);
+  if (!existingUserByEmail) {
+    throw new Error('Email not found');
+  }
 
-  const isPasswordValid = await bcrypt.compare(password, user.password);
+  const existingUserByRole = await userRepository.getUserByRole(data.role);
+  if (!existingUserByRole) {
+    throw new Error('Role is wrong');
+  }
+
+  if (existingUserByUsername.email !== email) {
+    throw new Error('Email and username do not match');
+  }
+
+  if (existingUserByUsername.role !== role) {
+    throw new Error('Role do not match');
+  }
+
+  const isPasswordValid = await bcrypt.compare(data.password, existingUserByUsername.password);
   if (!isPasswordValid) {
     throw new Error('Invalid password');
   }
 
-  const token = jwt.sign({ userId: user._id }, 'JWT_SECRET');
+  const token = jwt.sign(
+    { 
+      userId: existingUserByUsername.id,
+      username: existingUserByUsername.username,
+      email: existingUserByUsername.email,
+      role: existingUserByUsername.role
+    },
+    'JWT_SECRET'
+  );
+  //const token = jwt.sign({ userId: existingUserByUsername.id }, 'JWT_SECRET');
   return token;
 };
+
+const updateUser = async (data, id) => {
+  try{
+      const user = userRepository.updateUser(data, id);
+      return user;
+  }
+  catch(err){
+      throw err;
+  }
+}
 
 module.exports = {
   registerUser,
   loginUser,
+  updateUser
+  //logoutUser,
 };
